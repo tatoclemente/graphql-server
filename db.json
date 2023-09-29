@@ -1,0 +1,24 @@
+{
+  "persons": [
+    {
+      "name": "Gustavo",
+      "phone": "555-123-4567",
+      "street": "Calle Ficticia 123",
+      "city": "Nueva York",
+      "id": 1
+    },
+    {
+      "name": "Pedrito",
+      "phone": "555-987-6543",
+      "street": "Avenida Imaginaria 456",
+      "city": "Los Ángeles",
+      "id": 2
+    },
+    {
+      "name": "Mariana",
+      "street": "Calle Inventada 789",
+      "city": "Chicago",
+      "id": 3
+    }
+  ]
+}
