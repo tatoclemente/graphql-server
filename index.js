@@ -2,7 +2,6 @@ import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from '@apollo/server/standalone';
 import { v4 as uuidv4 } from 'uuid'
 import { GraphQLError } from 'graphql';
-import axios from 'axios';
 
 const persons = [
   {
@@ -92,15 +91,27 @@ const resolvers = {
             myExtension: "foo",
           },
         });
+      } else if (args.name.length === 0 || args.city.length === 0 || args.street === 0) {
+        const invalidArgs = args.name.length === 0 ? "name" : args.city.length === 0 ? "city" : "street"
+        throw new GraphQLError(`The following fields are missing: ${invalidArgs}`, {
+          invalidArgs: invalidArgs,
+          extensions: {
+            code: 'FORBIDDEN',
+            myExtension: "foo",
+          }
+        }
+        )
       }
+
       const person = { ...args, id: uuidv4() }
       persons.push(person)
       return person
     },
+
     editNumber: (root, args) => {
       const personIndex = persons.findIndex(p => p.name === args.name)
       if (!personIndex === -1) return null
-      
+
       const person = persons[personIndex]
       const updatedPerson = { ...person, phone: args.phone }
       persons[personIndex] = updatedPerson
