@@ -1,30 +1,13 @@
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from '@apollo/server/standalone';
-import { v4 as uuidv4 } from 'uuid'
 import { GraphQLError } from 'graphql';
 
-const persons = [
-  {
-    name: "Gustavo",
-    phone: "555-123-4567",
-    street: "Calle Ficticia 123",
-    city: "Nueva York",
-    id: 1
-  },
-  {
-    name: "Pedrito",
-    phone: "555-987-6543",
-    street: "Avenida Imaginaria 456",
-    city: "Los Ángeles",
-    id: 2
-  },
-  {
-    name: "Mariana",
-    street: "Calle Inventada 789",
-    city: "Chicago",
-    id: 3
-  }
-];
+import './db.js'
+import Person from './models/person.js'
+import User from './models/user.js'
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = 'ESTA_ES_MI_CLAVE'
 
 const typeDefs = `#graphql
   enum YesNo {
@@ -42,11 +25,22 @@ const typeDefs = `#graphql
       address: Address!
       id: ID!
   }
+
+  type User {
+    username: String!
+    friends: [Person]!
+    id: ID!
+  }
+
+  type Token {
+    value: String!
+  }
   
   type Query {
       personCount: Int!
       allPersons(phone: YesNo): [Person]!
       findPerson(name: String!): Person
+      me: User
   }
   
   type Mutation {
@@ -60,63 +54,99 @@ const typeDefs = `#graphql
         name: String!
         phone: String!
       ): Person
+      createUser(
+        username: String!
+      ): User
+      login(
+        username: String!
+        password: String!
+      ): Token
   }
 
 `
 
 const resolvers = {
   Query: {
-    personCount: () => persons.length,
+    personCount: () => Person.collection.countDocuments(),
     allPersons: async (root, args) => {
 
-      if (!args.phone) {
-        return persons
-      }
-      const byPhone = (person) =>
-        args.phone === 'YES' ? person.phone : !person.phone
-      return persons.filter(byPhone)
+      if (!args.phone) return Person.find({})
+      return Person.find({ phone: { $exists: args.phone === 'YES' } })
+
     },
     findPerson: (root, args) => {
       const { name } = args
-      return persons.find(person => person.name === name)
+      return Person.findOne({ name })
+      // return persons.find(person => person.name === name)
+    },
+    me: (root, args, context) => {
+      return context.currentUser
     }
   },
   Mutation: {
-    addPerson: (root, args) => {
-      if (persons.find(p => p.name === args.name)) {
-        throw new GraphQLError(`The name ${args.name} is already taken`, {
-          invalidArgs: args.name,
+    addPerson: async (root, args) => {
+      const person = new Person({ ...args })
+      try {
+        await person.save();
+      } catch (error) {
+        throw new GraphQLError(error.message, {
           extensions: {
-            code: 'FORBIDDEN',
-            myExtension: "foo",
+            code: 'BAD_USER_INPUT',
+            invalidArgs: args,
           },
         });
-      } else if (args.name.length === 0 || args.city.length === 0 || args.street === 0) {
-        const invalidArgs = args.name.length === 0 ? "name" : args.city.length === 0 ? "city" : "street"
-        throw new GraphQLError(`The following fields are missing: ${invalidArgs}`, {
-          invalidArgs: invalidArgs,
-          extensions: {
-            code: 'FORBIDDEN',
-            myExtension: "foo",
-          }
-        }
-        )
       }
+      return person
 
-      const person = { ...args, id: uuidv4() }
-      persons.push(person)
+    },
+    editNumber: async (root, args) => {
+      const person = await Person.findOne({ name: args.name });
+      if (!person) return
+      person.phone = args.phone;
+
+      try {
+        await person.save();
+      } catch (error) {
+        throw new GraphQLError(error.message, {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            invalidArgs: args,
+          },
+        });
+      }
       return person
     },
+    createUser: (root, args) => {
+      const user = new User({ username: args.username })
+      return user.save()
+      .catch(error => {
+        throw new GraphQLError(error.message, {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            invalidArgs: args,
+          },
+        })
+      })
+    },
+    login: async (root, args) => {
+      const user = await User.findOne({ username: args.username })
+      if (!user || args.password !== 'secret') {
+          throw new GraphQLError('wrong credentials', {
+            extensions: {
+              code: 'BAD_USER_INPUT',
+            }
+          })
+      }
 
-    editNumber: (root, args) => {
-      const personIndex = persons.findIndex(p => p.name === args.name)
-      if (!personIndex === -1) return null
+      const userForToken = {
+        username: user.username,
+        id: user._id
+      }
 
-      const person = persons[personIndex]
-      const updatedPerson = { ...person, phone: args.phone }
-      persons[personIndex] = updatedPerson
-      return updatedPerson
-    }
+      return {
+        value: jwt.sign(userForToken, JWT_SECRET)
+      }
+    },
   },
   Person: {
     address: (root) => {
@@ -131,7 +161,16 @@ const resolvers = {
 
 const server = new ApolloServer({
   typeDefs,
-  resolvers
+  resolvers,
+  context: async ({ req }) => {
+    const auth = req ? req.headers.authorization : null
+    if (auth && auth.toLowerCase().startsWith('bearer ')) {
+      const token = auth.substring(7)
+      const { id } = jwt.verify(token, JWT_SECRET)
+      const currentUser = await User.findById(id).populate('friends')
+      return { currentUser }
+    }
+  }
 })
 
 const { url } = await startStandaloneServer(server, {
