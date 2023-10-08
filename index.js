@@ -7,7 +7,9 @@ import Person from './models/person.js'
 import User from './models/user.js'
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = 'ESTA_ES_MI_CLAVE'
+import 'dotenv/config'
+
+const JWT_SECRET = process.env.JWT_SECRET
 
 const typeDefs = `#graphql
   enum YesNo {
@@ -163,7 +165,9 @@ const server = new ApolloServer({
   typeDefs,
   resolvers,
   context: async ({ req }) => {
+
     const auth = req ? req.headers.authorization : null
+
     if (auth && auth.toLowerCase().startsWith('bearer ')) {
       const token = auth.substring(7)
       const { id } = jwt.verify(token, JWT_SECRET)

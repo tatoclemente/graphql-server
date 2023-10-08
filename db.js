@@ -1,6 +1,6 @@
 import mongose from 'mongoose'
-
-const MONGODB_URI = 'mongodb+srv://tatoclemente:admin@cluster0.ongzcyv.mongodb.net/?retryWrites=true&w=majority'
+import 'dotenv/config'
+const MONGODB_URI = process.env.MONGODB_URI
 
 mongose.connect(MONGODB_URI, {
     useNewUrlParser: true,

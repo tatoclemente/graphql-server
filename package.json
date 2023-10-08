@@ -15,6 +15,7 @@
   "dependencies": {
     "@apollo/server": "^4.9.3",
     "axios": "^1.5.1",
+    "dotenv": "^16.3.1",
     "graphql": "^16.8.1",
     "json-server": "^0.17.3",
     "jsonwebtoken": "^9.0.2",
